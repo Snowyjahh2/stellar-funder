@@ -3,83 +3,192 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>Stellar Testnet Funder</title>
+<title>Stellar Token Creator</title>
 <link rel="stylesheet" href="/style.css">
 </head>
 <body>
 
 <div class="container">
-  <h1>STELLAR <span>FUNDER</span></h1>
-  <p class="subtitle">Bulk fund any Stellar Testnet wallet via Friendbot</p>
+  <h1>STELLAR <span>TOKEN CREATOR</span></h1>
+  <p class="subtitle">Create and manage your own token on Stellar Testnet</p>
 
-  <!-- Controls -->
-  <div class="card">
-    <div class="input-group">
-      <label>Destination Address</label>
-      <input type="text" id="dest" placeholder="G..." spellcheck="false" />
-    </div>
+  <div class="layout">
+    <div class="panels">
 
-    <div class="row">
-      <div class="input-group" style="flex:1">
-        <label>Total XLM</label>
-        <input type="number" id="amount" value="50000" min="9900" step="9900" />
+      <!-- STEP 1: Token Config -->
+      <div class="card">
+        <div class="step-badge">1</div>
+        <h2>Token Config</h2>
+        <div class="input-group">
+          <label>Asset Code (1-12 characters)</label>
+          <input type="text" id="asset-code" placeholder="e.g. FLIP" maxlength="12" spellcheck="false" />
+        </div>
+        <div class="input-group">
+          <label>Total Supply</label>
+          <input type="number" id="total-supply" value="1000000000" min="1" />
+        </div>
+        <div class="quick-amounts">
+          <button onclick="document.getElementById('total-supply').value=1000000">1M</button>
+          <button onclick="document.getElementById('total-supply').value=100000000">100M</button>
+          <button onclick="document.getElementById('total-supply').value=1000000000">1B</button>
+          <button onclick="document.getElementById('total-supply').value=10000000000">10B</button>
+        </div>
       </div>
-      <div class="input-group" style="flex:1">
-        <label>Workers (1-20)</label>
-        <input type="number" id="speed" value="10" min="1" max="20" step="1" />
+
+      <!-- STEP 2: Issuer Account -->
+      <div class="card">
+        <div class="step-badge">2</div>
+        <h2>Issuer Account</h2>
+        <p class="hint">The account that creates/mints your token.</p>
+        <div class="input-group">
+          <label>Public Key</label>
+          <input type="text" id="issuer-public" placeholder="G..." spellcheck="false" readonly />
+        </div>
+        <div class="input-group">
+          <label>Secret Key</label>
+          <div class="secret-row">
+            <input type="password" id="issuer-secret" placeholder="S..." spellcheck="false" />
+            <button class="btn-icon" onclick="toggleSecret('issuer-secret')" title="Show/hide">&#128065;</button>
+          </div>
+        </div>
+        <div class="btn-row-sm">
+          <button class="btn-sm green" onclick="generateKeypair('issuer')">Generate New</button>
+          <button class="btn-sm" onclick="fundAccount('issuer')">Fund via Friendbot</button>
+          <button class="btn-sm" onclick="checkAccount('issuer')">Check Balance</button>
+        </div>
+        <div class="status" id="issuer-status"></div>
       </div>
+
+      <!-- STEP 3: Distributor Account -->
+      <div class="card">
+        <div class="step-badge">3</div>
+        <h2>Distributor Account</h2>
+        <p class="hint">Holds and distributes your tokens. This is your "treasury".</p>
+        <div class="input-group">
+          <label>Public Key</label>
+          <input type="text" id="dist-public" placeholder="G..." spellcheck="false" readonly />
+        </div>
+        <div class="input-group">
+          <label>Secret Key</label>
+          <div class="secret-row">
+            <input type="password" id="dist-secret" placeholder="S..." spellcheck="false" />
+            <button class="btn-icon" onclick="toggleSecret('dist-secret')" title="Show/hide">&#128065;</button>
+          </div>
+        </div>
+        <div class="btn-row-sm">
+          <button class="btn-sm green" onclick="generateKeypair('dist')">Generate New</button>
+          <button class="btn-sm" onclick="fundAccount('dist')">Fund via Friendbot</button>
+          <button class="btn-sm" onclick="checkAccount('dist')">Check Balance</button>
+        </div>
+        <div class="status" id="dist-status"></div>
+      </div>
+
+      <!-- STEP 4: Create Token -->
+      <div class="card">
+        <div class="step-badge">4</div>
+        <h2>Create Token</h2>
+        <p class="hint">Sets up the trustline and mints the full supply to your distributor.</p>
+        <button class="btn-action gold" onclick="createToken()">CREATE TOKEN</button>
+        <div class="status" id="create-status"></div>
+      </div>
+
+      <!-- STEP 5: Send Tokens -->
+      <div class="card">
+        <div class="step-badge">5</div>
+        <h2>Send Tokens</h2>
+        <p class="hint">Send your custom token or XLM from any account.</p>
+        <div class="input-group">
+          <label>From (Secret Key)</label>
+          <div class="secret-row">
+            <input type="password" id="send-from" placeholder="S..." spellcheck="false" />
+            <button class="btn-icon" onclick="toggleSecret('send-from')" title="Show/hide">&#128065;</button>
+          </div>
+        </div>
+        <div class="btn-row-sm" style="margin-bottom:12px">
+          <button class="btn-sm" onclick="document.getElementById('send-from').value=document.getElementById('issuer-secret').value">Use Issuer</button>
+          <button class="btn-sm" onclick="document.getElementById('send-from').value=document.getElementById('dist-secret').value">Use Distributor</button>
+        </div>
+        <div class="input-group">
+          <label>To (Public Key)</label>
+          <input type="text" id="send-to" placeholder="G..." spellcheck="false" />
+        </div>
+        <div class="row">
+          <div class="input-group" style="flex:1">
+            <label>Asset</label>
+            <select id="send-asset">
+              <option value="custom">Custom Token</option>
+              <option value="XLM">XLM (native)</option>
+            </select>
+          </div>
+          <div class="input-group" style="flex:1">
+            <label>Amount</label>
+            <input type="number" id="send-amount" placeholder="0" min="0.0000001" step="any" />
+          </div>
+        </div>
+        <button class="btn-action green" onclick="sendTokens()">SEND</button>
+        <div class="status" id="send-status"></div>
+      </div>
+
+      <!-- STEP 6: Advanced -->
+      <div class="card">
+        <div class="step-badge">&#9881;</div>
+        <h2>Advanced</h2>
+
+        <div class="advanced-section">
+          <h3>Set Home Domain</h3>
+          <div class="input-group">
+            <label>Domain</label>
+            <input type="text" id="home-domain" placeholder="e.g. mysite.com" spellcheck="false" />
+          </div>
+          <button class="btn-sm" onclick="setDomain()">Set Domain</button>
+          <div class="status" id="domain-status"></div>
+        </div>
+
+        <div class="advanced-section">
+          <h3>Lock Issuer</h3>
+          <p class="hint warn">Permanently locks the issuer account. No more tokens can ever be minted. This is irreversible.</p>
+          <button class="btn-sm red" onclick="lockIssuer()">LOCK ISSUER</button>
+          <div class="status" id="lock-status"></div>
+        </div>
+
+        <div class="advanced-section">
+          <h3>Setup Trustline (Manual)</h3>
+          <p class="hint">Create a trustline on any account for your token so it can receive it.</p>
+          <div class="input-group">
+            <label>Account Secret Key</label>
+            <div class="secret-row">
+              <input type="password" id="trust-secret" placeholder="S..." spellcheck="false" />
+              <button class="btn-icon" onclick="toggleSecret('trust-secret')" title="Show/hide">&#128065;</button>
+            </div>
+          </div>
+          <button class="btn-sm" onclick="manualTrustline()">Create Trustline</button>
+          <div class="status" id="trust-status"></div>
+        </div>
+      </div>
+
     </div>
 
-    <div class="quick-amounts">
-      <button onclick="document.getElementById('amount').value=50000">50K</button>
-      <button onclick="document.getElementById('amount').value=100000">100K</button>
-      <button onclick="document.getElementById('amount').value=500000">500K</button>
-      <button onclick="document.getElementById('amount').value=1000000">1M</button>
-    </div>
-
-    <div class="btn-row">
-      <button class="btn-start" id="btn-start" onclick="startFunding()">START FUNDING</button>
-      <button class="btn-stop" id="btn-stop" onclick="stopFunding()" disabled>STOP</button>
-    </div>
-
-    <button class="btn-check" onclick="checkBalance()">CHECK BALANCE</button>
-    <div id="balance-result" class="balance-result"></div>
-  </div>
-
-  <!-- Progress -->
-  <div class="card" id="progress-card" style="display:none">
-    <h2>Progress</h2>
-    <div class="progress-bar-container">
-      <div class="progress-bar" id="progress-bar"></div>
-    </div>
-    <div class="progress-stats">
-      <div class="pstat">
-        <span class="pval" id="p-sent">0</span>
-        <span class="plabel">XLM Sent</span>
+    <!-- Debug Pane -->
+    <div class="debug-col">
+      <div class="card debug-card">
+        <div class="debug-header">
+          <h2>Debug Log</h2>
+          <button class="btn-clear" onclick="clearLog()">CLEAR</button>
+        </div>
+        <div class="debug-pane" id="debug-pane">
+          <div class="log-line info">Ready. Configure your token and go through each step.</div>
+        </div>
       </div>
-      <div class="pstat">
-        <span class="pval" id="p-completed">0</span>
-        <span class="plabel">Completed</span>
+      <div class="card">
+        <h2>Saved Config</h2>
+        <p class="hint">Your keys are saved in your browser. Clear with the button below.</p>
+        <div class="btn-row-sm">
+          <button class="btn-sm green" onclick="saveConfig()">Save to Browser</button>
+          <button class="btn-sm red" onclick="clearConfig()">Clear Saved Data</button>
+          <button class="btn-sm" onclick="exportConfig()">Export JSON</button>
+        </div>
+        <div class="status" id="save-status"></div>
       </div>
-      <div class="pstat">
-        <span class="pval" id="p-failed">0</span>
-        <span class="plabel">Failed</span>
-      </div>
-      <div class="pstat">
-        <span class="pval" id="p-total">0</span>
-        <span class="plabel">Total</span>
-      </div>
-    </div>
-  </div>
-
-  <!-- Debug Pane -->
-  <div class="card debug-card">
-    <div class="debug-header">
-      <h2>Debug Log</h2>
-      <button class="btn-clear" onclick="clearLog()">CLEAR</button>
-    </div>
-    <div class="debug-pane" id="debug-pane">
-      <div class="log-line info">Ready. Enter a destination address and click Start.</div>
     </div>
   </div>
 </div>
