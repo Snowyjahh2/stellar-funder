@@ -100,6 +100,31 @@ function sleep(ms) {
   return new Promise(r => setTimeout(r, ms));
 }
 
+// ---- Process a single account (fund + send) ----
+async function processAccount(idx, total, dest, isCreate, send, job) {
+  const tag = `[${idx}/${total}]`;
+  send('log', { msg: `${tag} Funding temp account...`, level: 'info' });
+
+  const temp = StellarSdk.Keypair.random();
+  const funded = await fundViaFriendbot(temp.publicKey(), send, tag);
+
+  if (!funded) {
+    send('log', { msg: `${tag} FAILED — could not fund temp account`, level: 'error' });
+    return { sent: 0, ok: false };
+  }
+
+  await sleep(1000); // Wait for ledger close
+
+  try {
+    const hash = await sendXLM(temp, dest, isCreate);
+    send('log', { msg: `${tag} Sent ${SEND_PER_ACCOUNT.toLocaleString()} XLM — TX: ${hash.slice(0, 16)}...`, level: 'success' });
+    return { sent: SEND_PER_ACCOUNT, ok: true };
+  } catch (e) {
+    send('log', { msg: `${tag} Send failed: ${e.message}`, level: 'error' });
+    return { sent: 0, ok: false };
+  }
+}
+
 // ---- Main funding endpoint (SSE stream) ----
 app.get('/api/fund', async (req, res) => {
   const { dest, amount, speed } = req.query;
@@ -113,7 +138,7 @@ app.get('/api/fund', async (req, res) => {
   }
 
   const totalXLM = parseInt(amount) || 50000;
-  const delayMs = Math.max(100, Math.floor(1000 / (parseFloat(speed) || 1)));
+  const concurrency = Math.min(20, Math.max(1, Math.round(parseFloat(speed) || 5)));
   const numAccounts = Math.ceil(totalXLM / SEND_PER_ACCOUNT);
 
   const jobId = Date.now().toString();
@@ -122,19 +147,27 @@ app.get('/api/fund', async (req, res) => {
 
   send('log', { msg: `Starting: ~${totalXLM.toLocaleString()} XLM via ${numAccounts} accounts`, level: 'info' });
   send('log', { msg: `Destination: ${dest.slice(0, 8)}...${dest.slice(-8)}`, level: 'info' });
-  send('log', { msg: `Speed: 1 account every ${(delayMs / 1000).toFixed(1)}s`, level: 'info' });
+  send('log', { msg: `Concurrency: ${concurrency} workers`, level: 'info' });
 
   let sentTotal = 0;
   let completed = 0;
   let failed = 0;
-  let needsCreate = false;
 
-  // Check if dest exists
+  // Check if dest exists — if not, create it with the first account before launching workers
+  let startIdx = 1;
   try {
     const exists = await accountExists(dest);
     if (!exists) {
-      send('log', { msg: 'Destination not funded yet, will create it with first account', level: 'warn' });
-      needsCreate = true;
+      send('log', { msg: 'Destination not funded yet, creating it first...', level: 'warn' });
+      const result = await processAccount(1, numAccounts, dest, true, send, jobs[jobId]);
+      if (result.ok) {
+        sentTotal += result.sent;
+        completed++;
+      } else {
+        failed++;
+      }
+      send('progress', { completed, failed, total: numAccounts, sent: sentTotal });
+      startIdx = 2;
     } else {
       send('log', { msg: 'Destination account exists', level: 'success' });
     }
@@ -142,46 +175,35 @@ app.get('/api/fund', async (req, res) => {
     send('log', { msg: `Error checking destination: ${e.message}`, level: 'error' });
   }
 
-  // Process accounts sequentially with controlled speed
-  for (let i = 1; i <= numAccounts; i++) {
-    if (!jobs[jobId]?.running) {
-      send('log', { msg: 'Stopped by user', level: 'warn' });
-      break;
+  // Concurrent worker pool
+  if (startIdx <= numAccounts && jobs[jobId]?.running) {
+    let nextIdx = startIdx;
+
+    async function worker() {
+      while (jobs[jobId]?.running) {
+        const idx = nextIdx++;
+        if (idx > numAccounts) break;
+
+        const result = await processAccount(idx, numAccounts, dest, false, send, jobs[jobId]);
+        if (result.ok) {
+          sentTotal += result.sent;
+          completed++;
+        } else {
+          failed++;
+        }
+        send('progress', { completed, failed, total: numAccounts, sent: sentTotal });
+      }
     }
 
-    const tag = `[${i}/${numAccounts}]`;
-    send('log', { msg: `${tag} Creating temp account...`, level: 'info' });
-
-    const temp = StellarSdk.Keypair.random();
-    const funded = await fundViaFriendbot(temp.publicKey(), send, tag);
-
-    if (!funded) {
-      send('log', { msg: `${tag} FAILED — could not fund temp account`, level: 'error' });
-      failed++;
-      send('progress', { completed, failed, total: numAccounts, sent: sentTotal });
-      continue;
+    const workers = [];
+    for (let w = 0; w < concurrency; w++) {
+      workers.push(worker());
     }
+    await Promise.all(workers);
+  }
 
-    await sleep(1000); // Wait for ledger
-
-    try {
-      const isCreate = needsCreate && i === 1;
-      const hash = await sendXLM(temp, dest, isCreate);
-      sentTotal += SEND_PER_ACCOUNT;
-      completed++;
-      needsCreate = false;
-      send('log', { msg: `${tag} Sent ${SEND_PER_ACCOUNT.toLocaleString()} XLM — TX: ${hash.slice(0, 16)}...`, level: 'success' });
-    } catch (e) {
-      failed++;
-      send('log', { msg: `${tag} Send failed: ${e.message}`, level: 'error' });
-    }
-
-    send('progress', { completed, failed, total: numAccounts, sent: sentTotal });
-
-    // Speed control delay between accounts
-    if (i < numAccounts && jobs[jobId]?.running) {
-      await sleep(delayMs);
-    }
+  if (!jobs[jobId]?.running) {
+    send('log', { msg: 'Stopped by user', level: 'warn' });
   }
 
   send('log', { msg: `Finished! Sent ${sentTotal.toLocaleString()} XLM total`, level: 'info' });
