@@ -1,0 +1,89 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Stellar Testnet Funder</title>
+<link rel="stylesheet" href="/style.css">
+</head>
+<body>
+
+<div class="container">
+  <h1>STELLAR <span>FUNDER</span></h1>
+  <p class="subtitle">Bulk fund any Stellar Testnet wallet via Friendbot</p>
+
+  <!-- Controls -->
+  <div class="card">
+    <div class="input-group">
+      <label>Destination Address</label>
+      <input type="text" id="dest" placeholder="G..." spellcheck="false" />
+    </div>
+
+    <div class="row">
+      <div class="input-group" style="flex:1">
+        <label>Total XLM</label>
+        <input type="number" id="amount" value="50000" min="9900" step="9900" />
+      </div>
+      <div class="input-group" style="flex:1">
+        <label>Speed (accounts/sec)</label>
+        <input type="number" id="speed" value="1" min="0.1" max="10" step="0.1" />
+      </div>
+    </div>
+
+    <div class="quick-amounts">
+      <button onclick="document.getElementById('amount').value=50000">50K</button>
+      <button onclick="document.getElementById('amount').value=100000">100K</button>
+      <button onclick="document.getElementById('amount').value=500000">500K</button>
+      <button onclick="document.getElementById('amount').value=1000000">1M</button>
+    </div>
+
+    <div class="btn-row">
+      <button class="btn-start" id="btn-start" onclick="startFunding()">START FUNDING</button>
+      <button class="btn-stop" id="btn-stop" onclick="stopFunding()" disabled>STOP</button>
+    </div>
+
+    <button class="btn-check" onclick="checkBalance()">CHECK BALANCE</button>
+    <div id="balance-result" class="balance-result"></div>
+  </div>
+
+  <!-- Progress -->
+  <div class="card" id="progress-card" style="display:none">
+    <h2>Progress</h2>
+    <div class="progress-bar-container">
+      <div class="progress-bar" id="progress-bar"></div>
+    </div>
+    <div class="progress-stats">
+      <div class="pstat">
+        <span class="pval" id="p-sent">0</span>
+        <span class="plabel">XLM Sent</span>
+      </div>
+      <div class="pstat">
+        <span class="pval" id="p-completed">0</span>
+        <span class="plabel">Completed</span>
+      </div>
+      <div class="pstat">
+        <span class="pval" id="p-failed">0</span>
+        <span class="plabel">Failed</span>
+      </div>
+      <div class="pstat">
+        <span class="pval" id="p-total">0</span>
+        <span class="plabel">Total</span>
+      </div>
+    </div>
+  </div>
+
+  <!-- Debug Pane -->
+  <div class="card debug-card">
+    <div class="debug-header">
+      <h2>Debug Log</h2>
+      <button class="btn-clear" onclick="clearLog()">CLEAR</button>
+    </div>
+    <div class="debug-pane" id="debug-pane">
+      <div class="log-line info">Ready. Enter a destination address and click Start.</div>
+    </div>
+  </div>
+</div>
+
+<script src="/app.js"></script>
+</body>
+</html>
