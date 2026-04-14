@@ -1,0 +1,10 @@
+services:
+  - type: web
+    name: word-spy
+    runtime: static
+    buildCommand: ""
+    staticPublishPath: .
+    headers:
+      - path: /*
+        name: X-Frame-Options
+        value: SAMEORIGIN
